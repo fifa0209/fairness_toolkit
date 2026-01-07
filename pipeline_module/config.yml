@@ -1,0 +1,76 @@
+# Fairness Pipeline Configuration
+# This file defines bias detection and mitigation settings
+
+# Bias Detection Configuration
+bias_detection:
+  # Protected attribute to analyze
+  protected_attribute: 'gender'
+  
+  # Reference distribution for representation bias
+  # Set to null for uniform distribution
+  reference_distribution:
+    Female: 0.51
+    Male: 0.49
+  
+  # Which bias checks to run
+  checks:
+    - representation
+    - proxy
+    - statistical_disparity
+  
+  # Thresholds
+  thresholds:
+    representation: 0.2    # 20% max difference
+    proxy_correlation: 0.5  # 0.5 correlation threshold
+    statistical_alpha: 0.05 # 5% significance level
+  
+  # Features to check for proxy/disparity
+  # Set to null to check all numeric features
+  feature_columns: null
+
+# Bias Mitigation Configuration
+bias_mitigation:
+  # Method: 'reweighting', 'resampling', or 'none'
+  method: 'reweighting'
+  
+  # Reweighting parameters (if method='reweighting')
+  params:
+    alpha: 1.0  # Smoothing (1.0=full, 0.0=none)
+  
+  # Resampling parameters (if method='resampling')
+  # params:
+  #   strategy: 'oversample'  # or 'undersample'
+  #   random_state: 42
+
+# Preprocessing Steps (optional)
+preprocessing:
+  - name: 'scaler'
+    type: 'StandardScaler'
+    params: {}
+
+# Fairness Metrics to Track
+fairness_metrics:
+  - demographic_parity
+  - equalized_odds
+  - equal_opportunity
+
+# Fairness Threshold
+fairness_threshold: 0.1  # 10% difference threshold
+
+# Reporting
+reporting:
+  # Generate reports
+  generate_json: true
+  generate_markdown: true
+  
+  # Output directory
+  output_dir: 'reports/'
+  
+  # Report filename prefix
+  filename_prefix: 'bias_report'
+
+# MLflow Integration
+mlflow:
+  enabled: true
+  experiment_name: 'fairness_pipeline'
+  tracking_uri: null  # null = default (./mlruns)

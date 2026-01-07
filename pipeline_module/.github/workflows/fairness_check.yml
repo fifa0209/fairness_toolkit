@@ -1,0 +1,82 @@
+name: Fairness Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main ]
+
+jobs:
+  fairness-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+    
+    - name: Run fairness tests
+      run: |
+        pytest pipeline_module/tests/test_pipeline_fairness.py -v --tb=short
+    
+    - name: Generate fairness report
+      if: always()
+      run: |
+        python -c "
+        from pipeline_module.src import BiasDetector
+        from pipeline_module.src.bias_report import BiasReportGenerator
+        import pandas as pd
+        import numpy as np
+        
+        # Generate sample data for testing
+        np.random.seed(42)
+        df = pd.DataFrame({
+            'feature1': np.random.randn(100),
+            'feature2': np.random.randn(100),
+            'protected': np.random.choice([0, 1], 100)
+        })
+        
+        # Run bias detection
+        detector = BiasDetector()
+        results = detector.detect_all_bias_types(df, 'protected')
+        
+        # Generate report
+        reporter = BiasReportGenerator()
+        for name, result in results.items():
+            reporter.add_result(name, result)
+        
+        reporter.save_markdown('fairness_report.md')
+        reporter.print_summary()
+        "
+    
+    - name: Upload fairness report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: fairness-report
+        path: fairness_report.md
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('fairness_report.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '## Fairness Check Results\n\n' + report
+          });

@@ -1,0 +1,18 @@
+# Pipeline Module Requirements
+
+# Core dependencies (also in root requirements.txt)
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# Configuration
+pyyaml>=6.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Module dependencies (from parent project)
+# Note: Install from project root to get shared utilities
+# pip install -e .
