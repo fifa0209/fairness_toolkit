@@ -547,10 +547,64 @@ class AlertAggregator:
         # Return top N
         return aggregated[:self.max_alerts]
     
+    # def _merge_alerts(self, alerts: List[FairnessAlert]) -> FairnessAlert:
+    #     """Merge multiple alerts for same metric."""
+    #     # Use highest severity
+    #     max_severity = max(a.severity for a in alerts)
+        
+    #     # Average value
+    #     avg_value = np.mean([a.current_value for a in alerts])
+        
+    #     # Combine affected groups
+    #     all_groups = set()
+    #     for a in alerts:
+    #         all_groups.update(a.affected_groups)
+        
+    #     # Latest timestamp
+    #     latest_timestamp = max(a.timestamp for a in alerts)
+        
+    #     # Highest priority
+    #     max_priority = max(a.priority_score for a in alerts)
+        
+    #     message = (
+    #         f"Aggregated alert: {len(alerts)} {alerts[0].metric_name} "
+    #         f"violations detected in past hour. "
+    #         f"Average value: {avg_value:.3f}"
+    #     )
+        
+    #     return FairnessAlert(
+    #         alert_id=f"aggregated_{alerts[0].metric_name}_{latest_timestamp.strftime('%Y%m%d_%H%M%S')}",
+    #         timestamp=latest_timestamp,
+    #         alert_type=AlertType.CONSISTENT_BIAS,
+    #         severity=max_severity,
+    #         metric_name=alerts[0].metric_name,
+    #         current_value=avg_value,
+    #         threshold=alerts[0].threshold,
+    #         affected_groups=list(all_groups),
+    #         message=message,
+    #         evidence={
+    #             'alert_count': len(alerts),
+    #             'value_range': (
+    #                 min(a.current_value for a in alerts),
+    #                 max(a.current_value for a in alerts)
+    #             ),
+    #         },
+    #         recommended_actions=alerts[0].recommended_actions,
+    #         priority_score=max_priority,
+    #     )
     def _merge_alerts(self, alerts: List[FairnessAlert]) -> FairnessAlert:
         """Merge multiple alerts for same metric."""
+        # Define severity ordering
+        severity_order = {
+            AlertSeverity.INFO: 1,
+            AlertSeverity.LOW: 2,
+            AlertSeverity.MEDIUM: 3,
+            AlertSeverity.HIGH: 4,
+            AlertSeverity.CRITICAL: 5,
+        }
+        
         # Use highest severity
-        max_severity = max(a.severity for a in alerts)
+        max_severity = max(alerts, key=lambda a: severity_order[a.severity]).severity
         
         # Average value
         avg_value = np.mean([a.current_value for a in alerts])
@@ -592,7 +646,6 @@ class AlertAggregator:
             recommended_actions=alerts[0].recommended_actions,
             priority_score=max_priority,
         )
-
 
 class AlertNotifier:
     """

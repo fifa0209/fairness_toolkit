@@ -1,0 +1,216 @@
+name: Fairness Validation Pipeline
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  fairness-tests:
+    name: Run Fairness Gate Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-html
+      
+      - name: Run bias detection tests
+        run: |
+          pytest pipeline_module/tests/test_bias_detection.py -v \
+            --cov=pipeline_module/src \
+            --cov-report=xml \
+            --cov-report=html
+      
+      - name: Run fairness gate tests
+        run: |
+          pytest pipeline_module/tests/test_fairness_gates.py -v \
+            -m fairness \
+            --html=reports/fairness_report.html \
+            --self-contained-html
+      
+      - name: Run transformer tests
+        run: |
+          pytest pipeline_module/tests/test_transformers.py -v
+      
+      - name: Run integration tests
+        run: |
+          pytest pipeline_module/tests/test_pipeline_fairness.py -v
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: fairness
+          name: fairness-coverage
+      
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports-${{ matrix.python-version }}
+          path: |
+            reports/
+            htmlcov/
+      
+      - name: Check fairness thresholds
+        run: |
+          python -c "
+          import json
+          import sys
+          
+          # Load bias detection results if available
+          try:
+              with open('reports/bias_report.json', 'r') as f:
+                  report = json.load(f)
+              
+              # Check if any high-severity bias detected
+              high_severity = sum(
+                  1 for r in report['results'].values()
+                  if r.get('severity') == 'high' and r.get('detected')
+              )
+              
+              if high_severity > 0:
+                  print(f'❌ FAIL: {high_severity} high-severity bias(es) detected')
+                  sys.exit(1)
+              else:
+                  print('✅ PASS: No high-severity bias detected')
+          except FileNotFoundError:
+              print('⚠️  WARNING: No bias report found')
+          "
+  
+  bias-detection:
+    name: Run Bias Detection Analysis
+    runs-on: ubuntu-latest
+    needs: fairness-tests
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run comprehensive bias detection
+        run: |
+          python pipeline_module/scripts/run_bias_detection.py \
+            --data data/sample_data.csv \
+            --protected-attr gender \
+            --output reports/bias_report.json \
+            --markdown reports/bias_report.md
+      
+      - name: Generate bias report
+        if: always()
+        run: |
+          echo "## Bias Detection Report" >> $GITHUB_STEP_SUMMARY
+          cat reports/bias_report.md >> $GITHUB_STEP_SUMMARY
+      
+      - name: Upload bias report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: bias-detection-report
+          path: reports/
+  
+  deployment-gate:
+    name: Fairness Deployment Gate
+    runs-on: ubuntu-latest
+    needs: [fairness-tests, bias-detection]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Download bias report
+        uses: actions/download-artifact@v3
+        with:
+          name: bias-detection-report
+          path: reports/
+      
+      - name: Evaluate deployment criteria
+        run: |
+          python -c "
+          import json
+          import sys
+          
+          with open('reports/bias_report.json', 'r') as f:
+              report = json.load(f)
+          
+          summary = report['summary']
+          
+          # Deployment criteria
+          max_high_severity = 0
+          max_medium_severity = 2
+          
+          high = summary['severity_counts']['high']
+          medium = summary['severity_counts']['medium']
+          
+          print('=== DEPLOYMENT GATE EVALUATION ===')
+          print(f'High-severity bias: {high} (max allowed: {max_high_severity})')
+          print(f'Medium-severity bias: {medium} (max allowed: {max_medium_severity})')
+          
+          if high > max_high_severity:
+              print('❌ DEPLOYMENT BLOCKED: High-severity bias detected')
+              sys.exit(1)
+          elif medium > max_medium_severity:
+              print('⚠️  DEPLOYMENT WARNING: Multiple medium-severity biases')
+              sys.exit(1)
+          else:
+              print('✅ DEPLOYMENT APPROVED: Fairness criteria met')
+          "
+      
+      - name: Comment PR with results
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('reports/bias_report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔍 Fairness Validation Report\n\n${report}`
+            });
+
+  notify:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [fairness-tests, bias-detection, deployment-gate]
+    if: failure()
+    
+    steps:
+      - name: Send notification
+        run: |
+          echo "⚠️ Fairness validation failed!"
+          echo "Please review the bias detection report and fix identified issues."

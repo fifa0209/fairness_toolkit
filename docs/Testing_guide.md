@@ -22,27 +22,7 @@
 
 ## Quick Start
 
-### Run All Tests (Recommended First Step)
-
-```bash
-# Run complete test suite
-python run_all_tests.py
-
-# Run specific module
-python run_all_tests.py --module measurement
-
-# Verbose output
-python run_all_tests.py --verbose
-
-# Save detailed report
-python run_all_tests.py --save-report
-```
-
-**Expected output**: All modules show ✅ PASSED with summary statistics.
-
----
-
-### Run Individual Test Files
+### Run Test Files
 
 ```bash
 # Test each module separately

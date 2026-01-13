@@ -160,6 +160,8 @@ class FairnessPowerAnalyzer:
         """
         Calculate statistical power for two-proportion test.
         
+        Uses the standard formula for power of a two-proportion z-test.
+        
         Args:
             baseline_rate: Rate in control group
             target_rate: Rate in treatment group
@@ -180,11 +182,11 @@ class FairnessPowerAnalyzer:
         # Effect size
         effect_size = abs(target_rate - baseline_rate)
         
+        # Pooled proportion for null hypothesis
+        p_pooled = (baseline_rate + target_rate) / 2
+        
         # Standard error under null
-        p_bar = (baseline_rate + target_rate) / 2
-        se_null = np.sqrt(
-            p_bar * (1 - p_bar) * (1/n_control + 1/n_treatment)
-        )
+        se_null = np.sqrt(p_pooled * (1 - p_pooled) * (1/n_control + 1/n_treatment))
         
         # Standard error under alternative
         se_alt = np.sqrt(
@@ -192,15 +194,26 @@ class FairnessPowerAnalyzer:
             target_rate * (1 - target_rate) / n_treatment
         )
         
-        # Critical value
+        # Z critical value for two-tailed test at alpha
         z_alpha = stats.norm.ppf(1 - self.alpha / 2)
         
-        # Non-centrality parameter
-        delta = effect_size / se_alt
+        # Calculate power
+        # For a two-sided test, power = P(reject H0 | H1 true)
+        # This is P(|Z| > z_alpha | delta != 0)
         
-        # Power calculation
-        z_beta = delta - z_alpha * (se_null / se_alt)
-        power = stats.norm.cdf(z_beta)
+        # Under H1, test statistic ~ N(delta/se_alt, 1)
+        # We reject if |observed_diff| > z_alpha * se_null
+        # Converting to z-score under H1: reject if |Z| > z_alpha * se_null / se_alt
+        
+        # Non-centrality parameter
+        ncp = effect_size / se_alt
+        
+        # Critical value in z-score units under alternative
+        critical_z = z_alpha * se_null / se_alt
+        
+        # Power for two-sided test
+        # P(Z > critical_z | ncp) + P(Z < -critical_z | ncp) where Z ~ N(ncp, 1)
+        power = 1 - stats.norm.cdf(critical_z - ncp) + stats.norm.cdf(-critical_z - ncp)
         
         result = PowerAnalysisResult(
             metric_name='demographic_parity',

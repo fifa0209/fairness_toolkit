@@ -114,9 +114,14 @@ if PYTORCH_AVAILABLE:
             
             Penalizes difference in mean predictions between groups.
             """
+            
+            
             # Apply sigmoid to get predictions
             predictions = torch.sigmoid(logits).squeeze()
             
+            # Handle batch size of 1 (predictions becomes 0-d tensor after squeeze)
+            if predictions.dim() == 0:
+                predictions = predictions.unsqueeze(0)  # () → (1,)
             # Separate by group
             mask_group0 = sensitive_features == 0
             mask_group1 = sensitive_features == 1

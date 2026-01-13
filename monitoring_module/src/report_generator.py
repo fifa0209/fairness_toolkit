@@ -99,7 +99,7 @@ class FairnessMonitoringReport:
         filename = f"fairness_monitoring_report_{timestamp}.md"
         filepath = self.output_dir / filename
         
-        with open(filepath, 'w') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(report_content)
         
         logger.info(f"Report saved to {filepath}")
@@ -714,7 +714,7 @@ class ABTestReport:
         filename = f"ab_test_report_{timestamp}.md"
         filepath = self.output_dir / filename
         
-        with open(filepath, 'w') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
         
         logger.info(f"A/B test report saved to {filepath}")

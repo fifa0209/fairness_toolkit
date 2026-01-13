@@ -5,9 +5,16 @@ Provides rigorous statistical analysis of fairness interventions through
 A/B testing, including power analysis, heterogeneous treatment effects,
 and multi-objective evaluation.
 
-Author: FairML Consulting
-Date: January 2026
 """
+
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+# Go up 3 levels: ab_testing.py -> src -> monitoring_module -> project_root
+project_root = Path(__file__).resolve().parents[2]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 import numpy as np
 import pandas as pd
@@ -18,6 +25,7 @@ from itertools import product
 
 from shared.logging import get_logger
 from shared.validation import validate_predictions, ValidationError
+
 
 logger = get_logger(__name__)
 
@@ -37,6 +45,7 @@ class ABTestResult:
     effect_size: float
     sample_sizes: Dict[str, int]
     interpretation: str
+    
     
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -182,24 +191,23 @@ class FairnessABTestAnalyzer:
             
             result = ABTestResult(
                 metric_name=metric,
-                control_value=control_value,
-                treatment_value=treatment_value,
-                absolute_difference=treatment_value - control_value,
-                relative_difference=(
+                control_value=float(control_value),
+                treatment_value=float(treatment_value),
+                absolute_difference=float(treatment_value - control_value),
+                relative_difference=float(
                     (treatment_value - control_value) / control_value
                     if control_value != 0 else 0
                 ),
                 confidence_interval=test_result['ci'],
-                p_value=test_result['p_value'],
-                is_significant=test_result['p_value'] < self.alpha,
-                effect_size=effect_size,
+                p_value=float(test_result['p_value']),
+                is_significant=bool(test_result['p_value'] < self.alpha),
+                effect_size=float(effect_size),
                 sample_sizes={
                     'control': len(control_df),
                     'treatment': len(treatment_df)
                 },
                 interpretation=interpretation,
             )
-            
             results[metric] = result
             
             logger.info(
@@ -304,15 +312,14 @@ class FairnessABTestAnalyzer:
             
             result = HeterogeneousEffectResult(
                 subgroup=subgroup_name,
-                control_value=control_value,
-                treatment_value=treatment_value,
-                treatment_effect=treatment_effect,
-                confidence_interval=(ci_lower, ci_upper),
-                p_value=p_value,
-                is_significant=p_value < self.alpha,
-                sample_size=len(control_sub) + len(treatment_sub),
+                control_value=float(control_value),
+                treatment_value=float(treatment_value),
+                treatment_effect=float(treatment_effect),
+                confidence_interval=(float(ci_lower), float(ci_upper)),
+                p_value=float(p_value),
+                is_significant=bool(p_value < self.alpha),
+                sample_size=int(len(control_sub) + len(treatment_sub)),
             )
-            
             results.append(result)
             
             logger.info(
@@ -371,20 +378,31 @@ class FairnessABTestAnalyzer:
             # Generic case
             trade_off_ratio = fair_change / perf_change if perf_change != 0 else 0
         
-        # Interpretation
-        if perf_change > 0 and fair_change < 0:
+        # Determine improvement direction
+        perf_improved = perf_result.treatment_value > perf_result.control_value
+        fair_improved = fair_result.treatment_value < fair_result.control_value
+        
+        perf_sig = perf_result.is_significant
+        fair_sig = fair_result.is_significant
+        
+        # Interpretation with significance consideration
+        if perf_sig and perf_improved and fair_sig and fair_improved:
             outcome = "Win-Win: Better performance AND better fairness"
-        elif perf_change < 0 and fair_change < 0:
-            outcome = f"Trade-off: {abs(perf_change):.1%} performance loss for {abs(fair_change):.3f} fairness gain"
-        elif perf_change > 0 and fair_change > 0:
+        elif perf_sig and perf_improved and not fair_sig:
+            outcome = "Performance improved, fairness unchanged"
+        elif fair_sig and fair_improved and not perf_sig:
+            outcome = "Fairness improved, performance unchanged"
+        elif perf_sig and not perf_improved and fair_sig and not fair_improved:
             outcome = "Lose-Lose: Worse performance AND worse fairness"
+        elif fair_sig and fair_improved and perf_sig and not perf_improved:
+            outcome = f"Trade-off: {abs(perf_change):.1%} performance loss for {abs(fair_change):.3f} fairness gain"
         else:
             outcome = "Mixed results"
         
         return {
             'performance_result': perf_result,
             'fairness_result': fair_result,
-            'trade_off_ratio': trade_off_ratio,
+            'trade_off_ratio': float(trade_off_ratio),
             'outcome': outcome,
             'recommendation': self._generate_recommendation(
                 perf_result, fair_result

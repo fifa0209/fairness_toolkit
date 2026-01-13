@@ -1,16 +1,17 @@
 # Fairness Pipeline Configuration
-# This file defines bias detection and mitigation settings
+# This file defines all bias detection and mitigation settings
 
-# Bias Detection Configuration
+version: "1.0.0"
+
+# ==================== BIAS DETECTION ====================
 bias_detection:
-  # Protected attribute to analyze
-  protected_attribute: 'gender'
+  # Protected attribute to monitor
+  protected_attribute: "gender"
   
-  # Reference distribution for representation bias
-  # Set to null for uniform distribution
+  # Reference distribution (optional - if null, assumes uniform)
   reference_distribution:
-    Female: 0.51
     Male: 0.49
+    Female: 0.51
   
   # Which bias checks to run
   checks:
@@ -18,59 +19,133 @@ bias_detection:
     - proxy
     - statistical_disparity
   
-  # Thresholds
+  # Thresholds for each check
   thresholds:
-    representation: 0.2    # 20% max difference
-    proxy_correlation: 0.5  # 0.5 correlation threshold
-    statistical_alpha: 0.05 # 5% significance level
-  
-  # Features to check for proxy/disparity
-  # Set to null to check all numeric features
-  feature_columns: null
+    representation_threshold: 0.2  # 20% max deviation
+    proxy_threshold: 0.5           # 50% max correlation
+    statistical_alpha: 0.05        # 5% significance level
+    effect_size_threshold: 0.5     # Medium effect size
 
-# Bias Mitigation Configuration
+# ==================== BIAS MITIGATION ====================
 bias_mitigation:
-  # Method: 'reweighting', 'resampling', or 'none'
-  method: 'reweighting'
+  # Mitigation method: reweighting, resampling, or none
+  method: "reweighting"
   
-  # Reweighting parameters (if method='reweighting')
+  # Method-specific parameters
   params:
-    alpha: 1.0  # Smoothing (1.0=full, 0.0=none)
-  
-  # Resampling parameters (if method='resampling')
-  # params:
-  #   strategy: 'oversample'  # or 'undersample'
-  #   random_state: 42
+    # For reweighting
+    alpha: 1.0  # Smoothing factor (1.0 = no smoothing)
+    
+    # For resampling
+    # strategy: "oversample"  # or "undersample"
+    # random_state: 42
 
-# Preprocessing Steps (optional)
+# ==================== PREPROCESSING ====================
 preprocessing:
-  - name: 'scaler'
-    type: 'StandardScaler'
+  - name: "scaler"
+    type: "StandardScaler"
     params: {}
+  
+  # Optional: Group-specific scaling
+  # - name: "group_scaler"
+  #   type: "FeatureScalerByGroup"
+  #   params:
+  #     method: "standard"
 
-# Fairness Metrics to Track
-fairness_metrics:
-  - demographic_parity
-  - equalized_odds
-  - equal_opportunity
+# ==================== POST-PROCESSING ====================
+post_processing:
+  calibration:
+    enabled: true
+    method: "platt"  # platt, isotonic, or temperature
+    global_calibration: false  # If true, one calibrator for all groups
+  
+  monitoring:
+    enabled: true
+    log_file: "logs/fairness_metrics.json"
+    alert_thresholds:
+      demographic_parity: 0.1
+      equalized_odds_tpr: 0.1
+      equalized_odds_fpr: 0.1
+      ece: 0.05
+      group_ece_disparity: 0.03
 
-# Fairness Threshold
-fairness_threshold: 0.1  # 10% difference threshold
+# ==================== CI/CD GATES ====================
+cicd_gates:
+  # Enable fairness gates in CI/CD
+  enabled: true
+  
+  # Deployment criteria (all must pass)
+  deployment_criteria:
+    max_high_severity_bias: 0
+    max_medium_severity_bias: 2
+    max_demographic_parity: 0.15
+    max_ece: 0.08
+  
+  # Test configuration
+  test_config:
+    representation_threshold: 0.15
+    proxy_threshold: 0.6
+    effect_size_threshold: 0.5
 
-# Reporting
+# ==================== REPORTING ====================
 reporting:
-  # Generate reports
-  generate_json: true
-  generate_markdown: true
+  # Output formats
+  formats:
+    - json
+    - markdown
+    - html
   
   # Output directory
-  output_dir: 'reports/'
+  output_dir: "reports/fairness"
   
-  # Report filename prefix
-  filename_prefix: 'bias_report'
+  # Include visualizations
+  visualizations:
+    reliability_diagrams: true
+    calibration_curves: true
+    group_comparisons: true
 
-# MLflow Integration
-mlflow:
-  enabled: true
-  experiment_name: 'fairness_pipeline'
-  tracking_uri: null  # null = default (./mlruns)
+# ==================== DATA SOURCES ====================
+data:
+  # Training data
+  train_data: "data/train.csv"
+  
+  # Validation data
+  val_data: "data/val.csv"
+  
+  # Test data
+  test_data: "data/test.csv"
+  
+  # Feature columns
+  feature_columns:
+    - age
+    - income
+    - credit_score
+    - employment_length
+  
+  # Target column
+  target_column: "approved"
+  
+  # Protected attributes
+  protected_attributes:
+    - gender
+    - race
+    - age_group
+
+# ==================== MODEL SETTINGS ====================
+model:
+  type: "LogisticRegression"
+  params:
+    max_iter: 1000
+    random_state: 42
+  
+  # Cross-validation
+  cross_validation:
+    enabled: true
+    n_folds: 5
+    stratify: true
+
+# ==================== LOGGING ====================
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/pipeline.log"

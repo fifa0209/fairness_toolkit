@@ -363,7 +363,7 @@ def generate_monitoring_report(
     
     # Write file
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
     
     logger.info(f"Monitoring report saved to {output_path}")
