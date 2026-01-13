@@ -26,7 +26,7 @@ wheels/
 # VS Code / Jupyter
 .vscode/
 .ipynb_checkpoints/
-*.ipynb
+
 
 # OS
 .DS_Store
