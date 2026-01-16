@@ -1,0 +1,22 @@
+artifact_path: file:D:/Research/Turing/TuringProject/fairness_toolkit/mlruns/2/models/m-899eac689fcf4026a0a51dfaea8c415c/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.10
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.8.0
+mlflow_version: 3.8.1
+model_id: m-899eac689fcf4026a0a51dfaea8c415c
+model_size_bytes: 754
+model_uuid: m-899eac689fcf4026a0a51dfaea8c415c
+prompts: null
+run_id: d49569a3f65e4c9081f51ee0ff230177
+utc_time_created: '2026-01-16 15:15:01.876326'

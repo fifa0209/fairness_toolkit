@@ -1,4 +1,4 @@
-# bias_detection.py
+# pipeline_module/src/bias_detection.py
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -63,9 +63,20 @@ class BiasDetector:
             recommendations.append(f"Consider resampling or reweighting.")
             recommendations.append(f"Max difference: {max_diff:.1%}")
 
+        # FIX: Populate evidence
         result = BiasDetectionResult(
-            bias_type='representation', detected=detected, severity=severity,
-            affected_groups=affected_groups, evidence={}, recommendations=recommendations
+            bias_type='representation', 
+            detected=detected, 
+            severity=severity,
+            affected_groups=affected_groups, 
+            evidence={
+                'max_difference': max_diff,
+                'threshold': self.representation_threshold,
+                'actual_distribution': actual_distribution,
+                'reference_distribution': reference_distribution,
+                'differences': differences,
+            },
+            recommendations=recommendations
         )
         log_bias_detection(logger, 'representation', detected, severity, affected_groups)
         return result
@@ -80,10 +91,20 @@ class BiasDetector:
                 feature_columns.remove(protected_attribute)
         
         if len(feature_columns) == 0:
-            return BiasDetectionResult(bias_type='proxy', detected=False, severity='low', affected_groups=[], evidence={}, recommendations=["No numeric features"])
+            return BiasDetectionResult(
+                bias_type='proxy', 
+                detected=False, 
+                severity='low', 
+                affected_groups=[], 
+                evidence={}, 
+                recommendations=["No numeric features"]
+            )
 
         protected_encoded = pd.Categorical(df[protected_attribute]).codes
         proxy_features = []
+        
+        # FIX: Initialize correlations dictionary
+        correlations = {}
         
         for col in feature_columns:
             try:
@@ -91,6 +112,14 @@ class BiasDetector:
                 if mask.sum() < 10: continue
                 
                 corr, p_value = stats.spearmanr(df.loc[mask, col], protected_encoded[mask])
+                
+                # FIX: Store correlation data
+                correlations[col] = {
+                    'correlation': abs(corr),
+                    'p_value': p_value,
+                    'significant': p_value < self.statistical_alpha,
+                }
+                
                 if abs(corr) > self.proxy_threshold and p_value < self.statistical_alpha:
                     proxy_features.append(col)
             except Exception:
@@ -99,11 +128,20 @@ class BiasDetector:
         detected = len(proxy_features) > 0
         severity = 'low'
         if detected:
-            severity = 'medium' # Simplified for brevity
+            severity = 'medium' 
         
+        # FIX: Pass correlations to evidence
         return BiasDetectionResult(
-            bias_type='proxy', detected=detected, severity=severity, affected_groups=proxy_features,
-            evidence={}, recommendations=["Proxy variables found"] if detected else ["No proxies"]
+            bias_type='proxy', 
+            detected=detected, 
+            severity=severity, 
+            affected_groups=proxy_features,
+            evidence={
+                'correlations': correlations, 
+                'threshold': self.proxy_threshold, 
+                'proxy_features': proxy_features
+            },
+            recommendations=["Proxy variables found"] if detected else ["No proxies"]
         )
 
     def detect_statistical_disparity(self, df, protected_attribute, feature_columns=None):
@@ -119,6 +157,9 @@ class BiasDetector:
         disparate_features = []
         groups = df[protected_attribute].unique()
         
+        # FIX: Initialize test_results dictionary
+        test_results = {}
+        
         for col in feature_columns:
             try:
                 data_0 = df[df[protected_attribute] == groups[0]][col].dropna()
@@ -128,15 +169,31 @@ class BiasDetector:
 
                 stat, p_val = stats.mannwhitneyu(data_0, data_1, alternative='two-sided')
                 
+                # FIX: Store test data
+                test_results[col] = {
+                    'p_value': p_val,
+                    'statistic': stat,
+                    'means': {
+                        str(groups[0]): data_0.mean(),
+                        str(groups[1]): data_1.mean()
+                    }
+                }
+                
                 if p_val < self.statistical_alpha:
                     disparate_features.append(col)
             except Exception:
                 continue
         
         detected = len(disparate_features) > 0
+        
+        # FIX: Pass test_results to evidence
         return BiasDetectionResult(
-            bias_type='measurement', detected=detected, severity='medium' if detected else 'low',
-            affected_groups=disparate_features, evidence={}, recommendations=["Disparity found"] if detected else ["No disparity"]
+            bias_type='measurement', 
+            detected=detected, 
+            severity='medium' if detected else 'low',
+            affected_groups=disparate_features,
+            evidence={'test_results': test_results, 'disparate_features': disparate_features},
+            recommendations=["Disparity found"] if detected else ["No disparity"]
         )
 
     def detect_all_bias_types(self, df, protected_attribute, reference_distribution=None, feature_columns=None):
