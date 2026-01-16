@@ -59,6 +59,8 @@ def setup_logger(
 def get_logger(name: str) -> logging.Logger:
     """Get or create a logger with standard configuration."""
     return setup_logger(name)
+# Setup basic config
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
 def log_metric(

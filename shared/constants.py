@@ -3,7 +3,7 @@ Constants for fairness pipeline.
 Central location for configuration values, metric definitions, and thresholds.
 """
 
-# Supported fairness metrics (48-hour scope: binary classification only)
+
 FAIRNESS_METRICS = {
     "demographic_parity": {
         "name": "Demographic Parity Difference",
@@ -27,6 +27,7 @@ FAIRNESS_METRICS = {
         "library": "fairlearn",
     },
 }
+
 
 # Protected attribute types
 PROTECTED_ATTRIBUTES = {
@@ -64,6 +65,7 @@ SUPPORTED_MODELS = {
 }
 
 # Bias detection thresholds
+
 BIAS_DETECTION_THRESHOLDS = {
     "representation_bias": {
         "severe": 0.3,   # >30% difference from benchmark

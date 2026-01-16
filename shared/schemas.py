@@ -9,6 +9,16 @@ from datetime import datetime
 
 
 @dataclass
+class BiasDetectionResult:
+    bias_type: str
+    detected: bool
+    severity: str
+    affected_groups: List[str]
+    evidence: Dict[str, Any]
+    recommendations: List[str]
+    timestamp: datetime = field(default_factory=datetime.now)
+
+@dataclass
 class FairnessMetricResult:
     """Result from fairness metric computation with statistical validation."""
     
