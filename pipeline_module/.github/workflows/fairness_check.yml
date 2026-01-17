@@ -84,6 +84,7 @@ jobs:
           path: |
             reports/
             htmlcov/
+          retention-days: 30
       
       - name: Check fairness thresholds
         run: |
@@ -168,7 +169,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bias-detection-report
+          name: bias-detection-report-${{ matrix.python-version }}
           path: reports/
   
   deployment-gate:

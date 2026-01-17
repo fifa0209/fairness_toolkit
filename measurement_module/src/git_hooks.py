@@ -164,7 +164,7 @@ jobs:
     
     - name: Comment PR
       if: always()
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
