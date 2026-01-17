@@ -7,13 +7,14 @@ Tests intersectionality.py and effect_sizes.py modules.
 import pytest
 import numpy as np
 import pandas as pd
+from typing import Dict, Any, Optional
 
 from measurement_module.src.intersectionality import (
     create_intersectional_groups,
     compute_intersectional_metrics,
     analyze_pairwise_disparities,
     identify_most_disadvantaged_groups,
-    test_intersectional_fairness,
+    analyze_intersectional_fairness,
     generate_intersectional_report,
 )
 
@@ -240,7 +241,7 @@ class TestIntersectionalFairnessTest:
         """Test comprehensive intersectional fairness analysis."""
         y_true, y_pred, gender, race = intersectional_data
         
-        results = test_intersectional_fairness(
+        results = analyze_intersectional_fairness(
             y_true=y_true,
             y_pred=y_pred,
             sensitive_features_dict={'gender': gender, 'race': race},
@@ -262,7 +263,7 @@ class TestIntersectionalFairnessTest:
         """Test with Bonferroni multiple comparison correction."""
         y_true, y_pred, gender, race = intersectional_data
         
-        results = test_intersectional_fairness(
+        results = analyze_intersectional_fairness(
             y_true=y_true,
             y_pred=y_pred,
             sensitive_features_dict={'gender': gender, 'race': race},
@@ -278,7 +279,7 @@ class TestIntersectionalFairnessTest:
         """Test with Benjamini-Hochberg FDR control."""
         y_true, y_pred, gender, race = intersectional_data
         
-        results = test_intersectional_fairness(
+        results = analyze_intersectional_fairness(
             y_true=y_true,
             y_pred=y_pred,
             sensitive_features_dict={'gender': gender, 'race': race},
@@ -298,7 +299,7 @@ class TestIntersectionalReport:
         """Test generating intersectional fairness report."""
         y_true, y_pred, gender, race = intersectional_data
         
-        test_results = test_intersectional_fairness(
+        test_results = analyze_intersectional_fairness(
             y_true=y_true,
             y_pred=y_pred,
             sensitive_features_dict={'gender': gender, 'race': race}
@@ -339,9 +340,10 @@ class TestCohensD:
     
     def test_large_effect(self):
         """Test large effect size."""
-        group_0 = np.array([0, 0, 0, 0, 0])
-        group_1 = np.array([1, 1, 1, 1, 1])
-        
+        # Create groups with actual variance
+        group_0 = np.array([0.0, 0.1, 0.0, 0.1, 0.0])
+        group_1 = np.array([10.0, 10.1, 10.0, 10.1, 10.0])
+   
         d = compute_cohens_d(group_0, group_1)
         
         assert abs(d) > 2.0  # Very large effect

@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, Optional
 
-from bias_detection import BiasDetector
+
+from pipeline_module.src.bias_detection import BiasDetector
 from shared.schemas import BiasDetectionResult
 from shared.logging import get_logger
 

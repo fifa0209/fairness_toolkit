@@ -150,106 +150,181 @@ def prepare_fairness_data(
     
 #     return metrics
 
+# def evaluate_model_comprehensive(
+#     model,
+#     X: np.ndarray,
+#     y: np.ndarray,
+#     sensitive_features: np.ndarray,
+#     prefix: str = '',
+#     requires_sensitive_features: bool = None,
+# ) -> Dict[str, float]:
+#     """
+#     Comprehensive evaluation with explicit control over sensitive features.
+    
+#     Args:
+#         model: Trained model
+#         X: Feature matrix
+#         y: True labels
+#         sensitive_features: Protected attribute values
+#         prefix: Prefix for metric names
+#         requires_sensitive_features: If None, auto-detect; if True/False, force behavior
+    
+#     Returns:
+#         Dictionary of all metrics
+#     """
+#     from sklearn.metrics import (
+#         accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+#     )
+#     from measurement_module.src.metrics_engine import (
+#         demographic_parity_difference,
+#         equalized_odds_difference,
+#     )
+    
+#     # Auto-detect if model requires sensitive features
+#     if requires_sensitive_features is None:
+#         # Check if this is a GroupFairnessCalibrator or similar
+#         model_class_name = model.__class__.__name__
+#         requires_sensitive_features = 'Calibrator' in model_class_name
+    
+#     # Get predictions
+#     if requires_sensitive_features:
+#         y_pred = model.predict(X, sensitive_features=sensitive_features)
+#     else:
+#         y_pred = model.predict(X)
+    
+#     # Standard ML metrics
+#     metrics = {
+#         f'{prefix}accuracy': accuracy_score(y, y_pred),
+#         f'{prefix}precision': precision_score(y, y_pred, zero_division=0),
+#         f'{prefix}recall': recall_score(y, y_pred, zero_division=0),
+#         f'{prefix}f1': f1_score(y, y_pred, zero_division=0),
+#     }
+    
+#     # Add AUC if model supports predict_proba
+#     try:
+#         if requires_sensitive_features and hasattr(model, 'predict_proba'):
+#             y_proba = model.predict_proba(X, sensitive_features=sensitive_features)
+#         elif hasattr(model, 'predict_proba'):
+#             y_proba = model.predict_proba(X)
+#         else:
+#             y_proba = None
+            
+#         if y_proba is not None:
+#             if y_proba.ndim > 1:
+#                 y_proba = y_proba[:, 1]
+#             metrics[f'{prefix}auc'] = roc_auc_score(y, y_proba)
+#     except Exception:
+#         pass
+    
+#     # Fairness metrics
+#     try:
+#         dp_diff, dp_ratio, dp_dict = demographic_parity_difference(
+#             y, y_pred, sensitive_features
+#         )
+#         metrics[f'{prefix}demographic_parity'] = abs(dp_diff)
+#         metrics[f'{prefix}demographic_parity_ratio'] = dp_ratio
+#     except Exception as e:
+#         logger.warning(f"Could not compute demographic parity: {e}")
+    
+#     # try:
+#     #     eo_diff, eo_ratio, eo_dict = equalized_odds_difference(
+#     #         y, y_pred, sensitive_features
+#     #     )
+#     #     metrics[f'{prefix}equalized_odds'] = abs(eo_diff)
+#     #     metrics[f'{prefix}equalized_odds_ratio'] = eo_ratio
+#     # except Exception as e:
+#     #     logger.warning(f"Could not compute equalized odds: {e}")
+#     try:
+#         eo_diff, eo_ratio, eo_dict = equalized_odds_difference(
+#             y, y_pred, sensitive_features
+#         )
+#         # Handle potential tuple structure in the difference
+#         if isinstance(eo_diff, tuple):
+#             # If it's a tuple (e.g., (diff, tpr_diff, fpr_diff)), take the first element (diff)
+#             metrics[f'{prefix}equalized_odds'] = abs(eo_diff[0])
+#         else:
+#             metrics[f'{prefix}equalized_odds'] = abs(eo_diff)
+            
+#         metrics[f'{prefix}equalized_odds_ratio'] = eo_ratio
+#     except Exception as e:
+#         logger.warning(f"Could not compute equalized odds: {e}")
+#     return metrics
+
 def evaluate_model_comprehensive(
     model,
-    X: np.ndarray,
-    y: np.ndarray,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
     sensitive_features: np.ndarray,
-    prefix: str = '',
-    requires_sensitive_features: bool = None,
-) -> Dict[str, float]:
+    metrics: list = None,
+    fairness_threshold: float = 0.1,
+    prefix: str = ''
+) -> Dict[str, Any]:
     """
-    Comprehensive evaluation with explicit control over sensitive features.
+    Comprehensive model evaluation including fairness metrics.
     
     Args:
         model: Trained model
-        X: Feature matrix
-        y: True labels
-        sensitive_features: Protected attribute values
-        prefix: Prefix for metric names
-        requires_sensitive_features: If None, auto-detect; if True/False, force behavior
-    
+        X_test: Test features  
+        y_test: Test labels
+        sensitive_features: Protected attributes
+        metrics: List of fairness metrics to compute
+        fairness_threshold: Threshold for fairness
+        prefix: Prefix for metric names (e.g., 'test_')
+        
     Returns:
         Dictionary of all metrics
     """
-    from sklearn.metrics import (
-        accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-    )
-    from measurement_module.src.metrics_engine import (
-        demographic_parity_difference,
-        equalized_odds_difference,
-    )
+    from measurement_module.src import FairnessAnalyzer
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
     
-    # Auto-detect if model requires sensitive features
-    if requires_sensitive_features is None:
-        # Check if this is a GroupFairnessCalibrator or similar
-        model_class_name = model.__class__.__name__
-        requires_sensitive_features = 'Calibrator' in model_class_name
+    y_pred = model.predict(X_test)
     
-    # Get predictions
-    if requires_sensitive_features:
-        y_pred = model.predict(X, sensitive_features=sensitive_features)
-    else:
-        y_pred = model.predict(X)
-    
-    # Standard ML metrics
-    metrics = {
-        f'{prefix}accuracy': accuracy_score(y, y_pred),
-        f'{prefix}precision': precision_score(y, y_pred, zero_division=0),
-        f'{prefix}recall': recall_score(y, y_pred, zero_division=0),
-        f'{prefix}f1': f1_score(y, y_pred, zero_division=0),
+    # Standard metrics with prefix
+    results = {
+        f'{prefix}accuracy': accuracy_score(y_test, y_pred),
+        f'{prefix}precision': precision_score(y_test, y_pred, zero_division=0),
+        f'{prefix}recall': recall_score(y_test, y_pred, zero_division=0),
+        f'{prefix}f1': f1_score(y_test, y_pred, zero_division=0),
     }
     
-    # Add AUC if model supports predict_proba
-    try:
-        if requires_sensitive_features and hasattr(model, 'predict_proba'):
-            y_proba = model.predict_proba(X, sensitive_features=sensitive_features)
-        elif hasattr(model, 'predict_proba'):
-            y_proba = model.predict_proba(X)
-        else:
-            y_proba = None
-            
-        if y_proba is not None:
-            if y_proba.ndim > 1:
-                y_proba = y_proba[:, 1]
-            metrics[f'{prefix}auc'] = roc_auc_score(y, y_proba)
-    except Exception:
-        pass
-    
     # Fairness metrics
-    try:
-        dp_diff, dp_ratio, dp_dict = demographic_parity_difference(
-            y, y_pred, sensitive_features
-        )
-        metrics[f'{prefix}demographic_parity'] = abs(dp_diff)
-        metrics[f'{prefix}demographic_parity_ratio'] = dp_ratio
-    except Exception as e:
-        logger.warning(f"Could not compute demographic parity: {e}")
+    if metrics is None:
+        metrics = ['demographic_parity', 'equalized_odds']
     
-    # try:
-    #     eo_diff, eo_ratio, eo_dict = equalized_odds_difference(
-    #         y, y_pred, sensitive_features
-    #     )
-    #     metrics[f'{prefix}equalized_odds'] = abs(eo_diff)
-    #     metrics[f'{prefix}equalized_odds_ratio'] = eo_ratio
-    # except Exception as e:
-    #     logger.warning(f"Could not compute equalized odds: {e}")
-    try:
-        eo_diff, eo_ratio, eo_dict = equalized_odds_difference(
-            y, y_pred, sensitive_features
-        )
-        # Handle potential tuple structure in the difference
-        if isinstance(eo_diff, tuple):
-            # If it's a tuple (e.g., (diff, tpr_diff, fpr_diff)), take the first element (diff)
-            metrics[f'{prefix}equalized_odds'] = abs(eo_diff[0])
-        else:
-            metrics[f'{prefix}equalized_odds'] = abs(eo_diff)
+    analyzer = FairnessAnalyzer()
+    
+    for metric in metrics:
+        try:
+            result = analyzer.compute_metric(
+                y_test, y_pred, sensitive_features,
+                metric=metric,
+                threshold=fairness_threshold
+            )
             
-        metrics[f'{prefix}equalized_odds_ratio'] = eo_ratio
-    except Exception as e:
-        logger.warning(f"Could not compute equalized odds: {e}")
-    return metrics
-
+            # Extract scalar value
+            if hasattr(result, 'value'):
+                metric_value = result.value
+            elif isinstance(result, dict) and 'value' in result:
+                metric_value = result['value']
+            elif isinstance(result, (int, float)):
+                metric_value = result
+            else:
+                # For complex return types, just use the first numeric value we can find
+                metric_value = None
+                if hasattr(result, '__dict__'):
+                    for attr_val in result.__dict__.values():
+                        if isinstance(attr_val, (int, float)):
+                            metric_value = attr_val
+                            break
+            
+            # Store with prefix
+            if metric_value is not None:
+                results[f'{prefix}{metric}'] = metric_value
+            
+        except Exception as e:
+            logger.warning(f"Could not compute {metric}: {e}")
+    
+    return results
 # def log_model_performance(
 #     metrics: Dict[str, float],
 #     model_name: str = 'Model',
@@ -404,6 +479,73 @@ def compute_group_statistics(
     return df
 
 
+# def validate_fairness_data(
+#     X: np.ndarray,
+#     y: np.ndarray,
+#     sensitive_features: np.ndarray,
+# ) -> bool:
+#     """
+#     Validate data for fairness training.
+    
+#     Args:
+#         X: Features
+#         y: Labels
+#         sensitive_features: Protected attributes
+        
+#     Returns:
+#         True if valid, raises ValueError otherwise
+#     """
+    
+#     # Check shapes
+#     if len(X) != len(y) or len(X) != len(sensitive_features):
+#         raise ValueError(
+#             f"Shape mismatch: X={len(X)}, y={len(y)}, "
+#             f"sensitive_features={len(sensitive_features)}"
+#         )
+    
+#     # Check for NaN
+#     if np.any(np.isnan(X)):
+#         raise ValueError("X contains NaN values")
+#     if np.any(np.isnan(y)):
+#         raise ValueError("y contains NaN values")
+#     if np.any(np.isnan(sensitive_features)):
+#         raise ValueError("sensitive_features contains NaN values")
+    
+#     # Check label values
+#     unique_labels = np.unique(y)
+#     if not np.array_equal(unique_labels, [0, 1]):
+#         raise ValueError(f"Labels must be binary (0, 1). Got: {unique_labels}")
+    
+#     # Allow single class if it's 0 or 1
+#     if len(unique_labels) == 1:
+#         if unique_labels[0] not in [0, 1]:
+#             raise ValueError(f"Labels must be binary (0, 1). Got: {unique_labels}")
+#         logger.warning(f"Only one class present: {unique_labels[0]}")
+#     elif not set(unique_labels).issubset({0, 1}):
+#         raise ValueError(f"Labels must be binary (0, 1). Got: {unique_labels}")
+    
+    
+#     # Check group sizes
+#     groups = np.unique(sensitive_features)
+#     for group in groups:
+#         n_group = np.sum(sensitive_features == group)
+#         if n_group < 10:
+#             logger.warning(f"Group {group} has only {n_group} samples (< 10)")
+    
+#     # Check class balance per group
+#     for group in groups:
+#         mask = sensitive_features == group
+#         y_group = y[mask]
+#         pos_rate = y_group.mean()
+        
+#         if pos_rate < 0.05 or pos_rate > 0.95:
+#             logger.warning(
+#                 f"Group {group} has imbalanced labels: "
+#                 f"{pos_rate:.1%} positive"
+#             )
+    
+#     logger.info("Data validation passed")
+#     return True
 def validate_fairness_data(
     X: np.ndarray,
     y: np.ndarray,
@@ -420,6 +562,7 @@ def validate_fairness_data(
     Returns:
         True if valid, raises ValueError otherwise
     """
+    
     # Check shapes
     if len(X) != len(y) or len(X) != len(sensitive_features):
         raise ValueError(
@@ -427,18 +570,28 @@ def validate_fairness_data(
             f"sensitive_features={len(sensitive_features)}"
         )
     
-    # Check for NaN
+    # Check for NaN in X
     if np.any(np.isnan(X)):
         raise ValueError("X contains NaN values")
+    
+    # Check for NaN in y
     if np.any(np.isnan(y)):
         raise ValueError("y contains NaN values")
+    
+    # Check for NaN in sensitive_features
     if np.any(np.isnan(sensitive_features)):
         raise ValueError("sensitive_features contains NaN values")
     
-    # Check label values
+    # Check label values - accept both int and float binary values
     unique_labels = np.unique(y)
-    if not np.array_equal(unique_labels, [0, 1]):
+    valid_binary_values = {0, 1, 0.0, 1.0}
+    
+    if not all(label in valid_binary_values for label in unique_labels):
         raise ValueError(f"Labels must be binary (0, 1). Got: {unique_labels}")
+    
+    # Warn if only one class (but don't raise error)
+    if len(unique_labels) < 2:
+        logger.warning(f"Only one class present: {unique_labels[0]}")
     
     # Check group sizes
     groups = np.unique(sensitive_features)
@@ -461,8 +614,6 @@ def validate_fairness_data(
     
     logger.info("Data validation passed")
     return True
-
-
 def create_synthetic_fairness_dataset(
     n_samples: int = 1000,
     n_features: int = 10,

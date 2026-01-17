@@ -126,41 +126,53 @@ def demographic_parity_difference(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     sensitive_features: np.ndarray,
+    allow_multiple_groups: bool = False
 ) -> Tuple[float, Dict[str, float], Dict[str, int]]:
     """
     Compute demographic parity difference.
     
-    Demographic Parity: P(Ŷ=1 | A=0) = P(Ŷ=1 | A=1)
-    Difference: max_groups |P(Ŷ=1 | A=a) - P(Ŷ=1 | A=b)|
+    Demographic Parity: All groups should receive positive predictions at equal rates.
+    Difference: |P(ŷ=1|s=0) - P(ŷ=1|s=1)|
     
     Args:
-        y_true: True labels
+        y_true: True labels (not used, but kept for API consistency)
         y_pred: Predicted labels
         sensitive_features: Protected attribute
+        allow_multiple_groups: If True, computes max difference across all groups
         
     Returns:
         Tuple of (difference, group_rates, group_sizes)
+        - difference: Maximum pairwise difference in positive prediction rates
+        - group_rates: Dictionary mapping "Group_X" to positive prediction rate
+        - group_sizes: Dictionary mapping "Group_X" to number of samples
     """
     validate_predictions(y_true, y_pred)
     
     groups = np.unique(sensitive_features)
-    if len(groups) != 2:
+    
+    # Validation for 2 groups (unless multiple groups allowed)
+    if not allow_multiple_groups and len(groups) != 2:
         raise ValidationError(f"Expected 2 groups, got {len(groups)}")
     
+    # Compute selection rates per group
     group_rates = {}
     group_sizes = {}
     
     for group in groups:
         mask = sensitive_features == group
-        n = np.sum(mask)
-        n_positive = np.sum(y_pred[mask] == 1)
-        
-        group_sizes[f"Group_{group}"] = int(n)
-        group_rates[f"Group_{group}"] = safe_divide(n_positive, n)
+        group_rates[f"Group_{group}"] = float(np.mean(y_pred[mask]))
+        group_sizes[f"Group_{group}"] = int(np.sum(mask))
     
-    # Difference between groups
-    rates = list(group_rates.values())
-    difference = abs(rates[0] - rates[1])
+    # Compute difference
+    if allow_multiple_groups:
+        # For multiple groups, compute max pairwise difference
+        rates = list(group_rates.values())
+        difference = max(rates) - min(rates)
+    else:
+        # Original 2-group logic
+        rate_0 = group_rates[f"Group_{groups[0]}"]
+        rate_1 = group_rates[f"Group_{groups[1]}"]
+        difference = abs(rate_0 - rate_1)
     
     logger.info(f"Demographic parity difference: {difference:.4f}")
     
@@ -215,8 +227,8 @@ def equalized_odds_difference(
             tpr = fpr = 0.0
             logger.warning(f"Group {group} has only one class")
         
-        group_tprs[f"Group_{group}"] = tpr
-        group_fprs[f"Group_{group}"] = fpr
+        group_tprs[f"Group_{group}"] = float(tpr)
+        group_fprs[f"Group_{group}"] = float(fpr)
     
     # Max difference in TPR and FPR
     tpr_values = list(group_tprs.values())
@@ -283,7 +295,7 @@ def equal_opportunity_difference(
             tpr = 0.0
             logger.warning(f"Group {group} has only one class")
         
-        group_tprs[f"Group_{group}"] = tpr
+        group_tprs[f"Group_{group}"] = float(tpr)
     
     # Difference in TPR
     tpr_values = list(group_tprs.values())
@@ -299,6 +311,7 @@ def compute_metric(
     y_true: Union[np.ndarray, 'pd.Series'],
     y_pred: Union[np.ndarray, 'pd.Series'],
     sensitive_features: Union[np.ndarray, 'pd.Series'],
+    allow_multiple_groups: bool = False,
 ) -> Tuple[float, Dict[str, float], Dict[str, int]]:
     """
     Compute specified fairness metric.
@@ -308,6 +321,7 @@ def compute_metric(
         y_true: True labels
         y_pred: Predicted labels
         sensitive_features: Protected attribute
+        allow_multiple_groups: Allow more than 2 groups for demographic_parity
         
     Returns:
         Tuple of (metric_value, group_metrics, group_sizes)
@@ -325,7 +339,9 @@ def compute_metric(
     
     # Compute metric
     if metric_name == "demographic_parity":
-        return demographic_parity_difference(y_true, y_pred, sensitive_features)
+        return demographic_parity_difference(
+            y_true, y_pred, sensitive_features, allow_multiple_groups
+        )
     
     elif metric_name == "equalized_odds":
         return equalized_odds_difference(y_true, y_pred, sensitive_features)

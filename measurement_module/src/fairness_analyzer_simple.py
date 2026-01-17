@@ -88,7 +88,7 @@ class FairnessAnalyzer:
         
         # Compute point estimate
         metric_value, group_metrics, group_sizes = _compute_metric(
-            metric, y_true, y_pred, sensitive_features
+            metric, y_true, y_pred, sensitive_features, allow_multiple_groups=True
         )
         
         # Determine fairness status
